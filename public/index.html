@@ -1,77 +1,146 @@
-<script>
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${location.host}`);
-    const trackerContainer = document.getElementById('tracker');
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>LoL Cooldown Tracker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            margin: 0;
+            padding: 10px;
+        }
+        #controls {
+            margin-bottom: 10px;
+        }
+        button {
+            background: #1e2328;
+            color: #cdbe91;
+            border: 1px solid #785a28;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #2a323d;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .card {
+            display: flex;
+            align-items: center;
+            background: rgba(20, 25, 30, 0.85);
+            border: 1px solid #3c3c41;
+            padding: 6px;
+            border-radius: 4px;
+            width: 320px;
+        }
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 1px solid #785a28;
+        }
+        .info {
+            flex-grow: 1;
+        }
+        .name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #f0e6d2;
+        }
+        .stats {
+            font-size: 12px;
+            color: #a09b8c;
+        }
+        .ah-badge {
+            background: #091428;
+            color: #005a82;
+            border: 1px solid #005a82;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
 
-    // Mappatura di base degli oggetti popolari che danno Ability Haste
-    // (L'API locale fornisce gli oggetti posseduti da ciascun giocatore)
-    function calculateAbilityHaste(player) {
-        let totalAH = 0;
+    <div id="controls">
+        <button onclick="toggleBackground()">Sfondo Trasparente (OBS)</button>
+    </div>
 
-        // 1. Calcolo Haste dagli Oggetti (se presenti nell'API)
-        if (player.items && Array.isArray(player.items)) {
-            player.items.forEach(item => {
-                // Esempi di stats o ID item forniti dall'API locale
-                if (item.abilityHaste) {
-                    totalAH += item.abilityHaste;
+    <div id="tracker" class="container">
+        <div style="color: #a09b8c;">In attesa di dati dalla partita...</div>
+    </div>
+
+    <script>
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${location.host}`);
+        const trackerContainer = document.getElementById('tracker');
+
+        // Calcola l'Ability Haste partendo dagli oggetti presenti nell'inventario
+        function calculateAH(player) {
+            let totalAH = 0;
+            if (player && Array.isArray(player.items)) {
+                player.items.forEach(item => {
+                    // Se l'oggetto ha la proprietà abilityHaste o stats nell'API di LoL
+                    if (item && item.abilityHaste) {
+                        totalAH += Number(item.abilityHaste);
+                    }
+                });
+            }
+            return totalAH;
+        }
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.gameEnd) {
+                    trackerContainer.innerHTML = '<div style="color: #a09b8c;">Partita terminata.</div>';
+                    return;
                 }
-            });
-        }
 
-        // 2. Calcolo Haste dalle Rune
-        if (player.runes) {
-            // Stat Shards o rune come Transcendance (se presenti nel payload)
-            if (player.runes.keystone && player.runes.keystone.id === 8210) {
-                totalAH += 10;
-            }
-        }
+                const players = Array.isArray(data) ? data : (data.allPlayers || []);
+                if (!players || players.length === 0) return;
 
-        return totalAH;
-    }
+                trackerContainer.innerHTML = players.map(player => {
+                    const champName = player.championName || "Unknown";
+                    const level = player.level || 1;
+                    const team = player.team || "UNKNOWN";
+                    const ahValue = calculateAH(player);
+                    
+                    const iconUrl = `https://ddragon.leagueoflegends.com/cdn/14.1.1/img/champion/${champName}.png`;
 
-    ws.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            
-            if (data.gameEnd) {
-                trackerContainer.innerHTML = '<div style="color: #a09b8c;">Partita terminata.</div>';
-                return;
-            }
-
-            const players = Array.isArray(data) ? data : (data.allPlayers || []);
-            if (players.length === 0) return;
-
-            trackerContainer.innerHTML = players.map(player => {
-                const champName = player.championName || "Unknown";
-                const level = player.level || 1;
-                const team = player.team || "UNKNOWN";
-                
-                // Calcola l'Ability Haste stimata/rilevata
-                const calculatedAH = calculateAbilityHaste(player);
-                
-                const iconUrl = `https://ddragon.leagueoflegends.com/cdn/14.1.1/img/champion/${champName}.png`;
-
-                return `
-                    <div class="card">
-                        <img class="avatar" src="${iconUrl}" onerror="this.src='https://via.placeholder.com/48'" alt="${champName}">
-                        <div class="info">
-                            <div class="name">${champName} <span style="font-size: 11px; color: #785a28;">(Lvl ${level})</span></div>
-                            <div class="stats">Team: ${team}</div>
+                    return `
+                        <div class="card">
+                            <img class="avatar" src="${iconUrl}" onerror="this.src='https://via.placeholder.com/48'" alt="${champName}">
+                            <div class="info">
+                                <div class="name">${champName} <span style="font-size: 11px; color: #785a28;">(Lvl ${level})</span></div>
+                                <div class="stats">Team: ${team}</div>
+                            </div>
+                            <div class="ah-badge">
+                                AH: ${ahValue}
+                            </div>
                         </div>
-                        <div class="ah-badge" title="Ability Haste">
-                            AH: ${calculatedAH}
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
 
-        } catch (err) {
-            console.error("Errore nel parsing dei dati WebSocket:", err);
+            } catch (err) {
+                console.error("Errore nel parsing o rendering dei dati:", err);
+            }
+        };
+
+        function toggleBackground() {
+            document.body.style.backgroundColor = 
+                document.body.style.backgroundColor === 'transparent' ? 'rgba(0, 0, 0, 0.7)' : 'transparent';
         }
-    };
-
-    function toggleBackground() {
-        document.body.style.backgroundColor = 
-            document.body.style.backgroundColor === 'transparent' ? 'rgba(0, 0, 0, 0.7)' : 'transparent';
-    }
-</script>
+    </script>
+</body>
+</html>
