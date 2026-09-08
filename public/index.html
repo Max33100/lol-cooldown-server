@@ -2,192 +2,136 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>LoL OBS Cooldown Overlay</title>
+    <title>LoL Cooldown Tracker</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap');
-
-        * { box-sizing: border-box; }
-        
         body {
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 8px;
-            background: transparent;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: rgba(0, 0, 0, 0.7);
             color: #fff;
-            user-select: none;
-            overflow: hidden;
+            margin: 0;
+            padding: 10px;
         }
-
-        #tracker-root {
+        #controls {
+            margin-bottom: 10px;
+        }
+        button {
+            background: #1e2328;
+            color: #cdbe91;
+            border: 1px solid #785a28;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #2a323d;
+        }
+        .container {
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            width: 280px;
-            transition: all 0.3s ease;
-        }
-
-        /* MODALITÀ ANTI-STREAM SNIPER (Sulla Minimappa) */
-        #tracker-root.mode-minimap {
-            width: 290px;
-            height: 290px;
-            background: rgba(10, 15, 26, 0.95);
-            border: 2px solid #a855f7;
-            border-radius: 12px;
-            padding: 10px;
-            justify-content: center;
-            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
-        }
-
-        .enemy-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 6px 8px;
-            border-radius: 8px;
-            backdrop-filter: blur(4px);
-        }
-
-        .champ-box {
-            display: flex;
-            align-items: center;
             gap: 8px;
         }
-
-        .avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 2px solid #a855f7;
-            object-fit: cover;
-        }
-
-        .champ-name {
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .spells-box {
-            display: flex;
-            gap: 6px;
-        }
-
-        .spell-btn {
-            position: relative;
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            overflow: hidden;
-            background: #000;
-            cursor: pointer;
-        }
-
-        .spell-btn img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .cd-overlay {
-            position: absolute;
-            inset: 0;
-            background: rgba(220, 38, 38, 0.9);
+        .card {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 800;
-            color: #fff;
-        }
-
-        .controls-bar {
-            margin-bottom: 8px;
-        }
-
-        .mode-btn {
-            background: #7e22ce;
-            border: none;
-            color: white;
-            padding: 4px 8px;
+            background: rgba(20, 25, 30, 0.85);
+            border: 1px solid #3c3c41;
+            padding: 6px;
             border-radius: 4px;
-            font-size: 10px;
-            font-weight: 700;
-            cursor: pointer;
+            width: 320px;
+        }
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 1px solid #785a28;
+        }
+        .info {
+            flex-grow: 1;
+        }
+        .name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #f0e6d2;
+        }
+        .stats {
+            font-size: 12px;
+            color: #a09b8c;
+        }
+        .ah-badge {
+            background: #091428;
+            color: #005a82;
+            border: 1px solid #005a82;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 12px;
         }
     </style>
 </head>
 <body>
 
-    <div class="controls-bar">
-        <button class="mode-btn" onclick="toggleMinimapMode()">Toggle Minimap Anti-Snipe</button>
+    <div id="controls">
+        <button onclick="toggleBackground()">Sfondo Trasparente (OBS)</button>
     </div>
 
-    <div id="tracker-root">
-        <div style="font-size:12px; color:#a1a1aa; text-align:center;">In attesa di partita...</div>
+    <div id="tracker" class="container">
+        <div style="color: #a09b8c;">In attesa di dati dalla partita...</div>
     </div>
 
     <script>
+        // Stabilisce la connessione WebSocket automatica col server Render
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${location.host}`);
-        let isMinimapMode = false;
-        const activeCooldowns = {};
 
-        function toggleMinimapMode() {
-            isMinimapMode = !isMinimapMode;
-            document.getElementById('tracker-root').classList.toggle('mode-minimap', isMinimapMode);
-        }
+        const trackerContainer = document.getElementById('tracker');
 
         ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.gameEnd) {
-                document.getElementById('tracker-root').innerHTML = '<div style="font-size:12px; color:#a1a1aa; text-align:center;">Partita Terminata.</div>';
-                return;
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.gameEnd) {
+                    trackerContainer.innerHTML = '<div style="color: #a09b8c;">Partita terminata. In attesa di una nuova partita...</div>';
+                    return;
+                }
+
+                // data può essere direttamente l'array dei giocatori o l'oggetto risposto da Riot
+                const players = Array.isArray(data) ? data : (data.allPlayers || []);
+
+                if (players.length === 0) return;
+
+                // Renderizza la lista dei giocatori
+                trackerContainer.innerHTML = players.map(player => {
+                    const champName = player.championName || "Unknown";
+                    const level = player.level || 1;
+                    const team = player.team || "UNKNOWN";
+                    
+                    // Recupero dell'icona da DataDragon
+                    const iconUrl = `https://ddragon.leagueoflegends.com/cdn/14.1.1/img/champion/${champName}.png`;
+
+                    return `
+                        <div class="card">
+                            <img class="avatar" src="${iconUrl}" onerror="this.src='https://via.placeholder.com/48'" alt="${champName}">
+                            <div class="info">
+                                <div class="name">${champName} <span style="font-size: 10px; color: #785a28;">(Lvl ${level})</span></div>
+                                <div class="stats">Team: ${team}</div>
+                            </div>
+                            <div class="ah-badge">AH: --</div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error("Errore nel parsing dei dati WebSocket:", err);
             }
-            renderEnemies(data);
         };
 
-        function renderEnemies(players) {
-            const root = document.getElementById('tracker-root');
-            root.innerHTML = '';
-
-            const localPlayer = players.find(p => p.isLocalPlayer);
-            const localTeam = localPlayer ? localPlayer.team : 'ORDER';
-            const enemies = players.filter(p => p.team !== localTeam);
-
-            enemies.forEach(enemy => {
-                const row = document.createElement('div');
-                row.className = 'enemy-row';
-
-                const champImg = `https://ddragon.leagueoflegends.com/cdn/14.4.1/img/champion/${enemy.championName}.png`;
-
-                row.innerHTML = `
-                    <div class="champ-box">
-                        <img class="avatar" src="${champImg}">
-                        <span class="champ-name">${enemy.championName}</span>
-                    </div>
-                    <div class="spells-box">
-                        <div class="spell-btn" onclick="triggerCd('${enemy.summonerName}_ult', 80)">
-                            <img src="${champImg}">
-                            ${getOverlayHtml(enemy.summonerName + '_ult')}
-                        </div>
-                    </div>
-                `;
-                root.appendChild(row);
-            });
-        }
-
-        function triggerCd(key, baseCd) {
-            activeCooldowns[key] = Date.now() + (baseCd * 1000);
-        }
-
-        function getOverlayHtml(key) {
-            if (activeCooldowns[key] && activeCooldowns[key] > Date.now()) {
-                const rem = Math.ceil((activeCooldowns[key] - Date.now()) / 1000);
-                return `<div class="cd-overlay">${rem}s</div>`;
+        function toggleBackground() {
+            if (document.body.style.backgroundColor === 'transparent') {
+                document.body.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            } else {
+                document.body.style.backgroundColor = 'transparent';
             }
-            return '';
         }
     </script>
 </body>
