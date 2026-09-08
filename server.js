@@ -7,13 +7,22 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(express.json());
+// Aumenta il limite del body parser per gestire payload JSON grandi senza errori 413
+app.use(express.json({ limit: '10mb' }));
+
+// Fornisce i file statici dalla cartella public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Invia i dati ricevuti dall'Agente locale a tutti i widget OBS collegati
+// Rotta radice per servire direttamente il file index.html evitando l'errore "Cannot GET /"
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Endpoint per ricevere i dati inviati dall'Agente C# locale
 app.post('/api/ingest', (req, res) => {
     const gameData = req.body;
     
+    // Invia i dati tramite WebSocket a tutti i client / widget OBS connessi
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(gameData));
