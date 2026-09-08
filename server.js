@@ -8,10 +8,10 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Gestione payload grandi
+// Permette di ricevere payload JSON grandi
 app.use(express.json({ limit: '10mb' }));
 
-// Gestione dinamica cartella statici
+// Gestione cartella statici (public / Public)
 let publicFolder = path.join(__dirname, 'public');
 if (!fs.existsSync(publicFolder) && fs.existsSync(path.join(__dirname, 'Public'))) {
     publicFolder = path.join(__dirname, 'Public');
@@ -23,14 +23,15 @@ app.get('/', (req, res) => {
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
-        res.status(404).send("File index.html non trovato!");
+        res.status(404).send("File index.html non trovato nella cartella public!");
     }
 });
 
-// ROTTA FONDAMENTALE PER RECEPIRE I DATI DALL'AGENTE
+// ROTTA INGEST: Riceve i dati dall'Agente C#
 app.post('/api/ingest', (req, res) => {
     const gameData = req.body;
     
+    // Invia i dati tramite WebSocket a tutte le pagine web connesse
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(gameData));
